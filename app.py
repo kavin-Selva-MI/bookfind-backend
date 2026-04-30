@@ -4,113 +4,143 @@ import requests
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-CORS(app)  # This allows your HTML file to talk to this server
+CORS(app)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (compatible; BookFindBot/1.0)"
 }
 
-# ─────────────────────────────────────────────
-#  One function per store
-#  Each returns: { "store": "...", "url": "...", "price": "...", "found": True/False }
-# ─────────────────────────────────────────────
+TIMEOUT = 10
 
-def search_panuval(title):
-    store = "Panuval"
-    url = f"https://www.panuval.com/search?q={requests.utils.quote(title)}"
+
+# ---------- PANUVAL ----------
+def search_panuval(title: str):
+    search_url = "https://www.panuval.com/search"
+    params = {"q": title}
+
     try:
-        res = requests.get(url, headers=HEADERS, timeout=8)
-        soup = BeautifulSoup(res.text, "html.parser")
-        # TODO: inspect panuval.com and update this selector
-        <span class="price-normal">₹50</span>
-        price = price_tag.get_text(strip=True) if price_tag else "Visit site to check"
-        return {"store": store, "url": url, "price": price, "found": bool(price_tag)}
+        response = requests.get(
+            search_url,
+            params=params,
+            headers=HEADERS,
+            timeout=TIMEOUT
+        )
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        book_card = soup.select_one("div.product-item")
+
+        if not book_card:
+            return {
+                "store": "Panuval",
+                "price": "Not found",
+                "availability": "Not available",
+                "url": search_url
+            }
+
+        # ✅ EXACT PRICE SELECTOR FROM HTML
+        price_tag = book_card.select_one("span.price-normal")
+        price = price_tag.get_text(strip=True) if price_tag else "Check site"
+
+        link_tag = book_card.find("a", href=True)
+        book_url = (
+            "https://www.panuval.com" + link_tag["href"]
+            if link_tag else search_url
+        )
+
+        return {
+            "store": "Panuval",
+            "price": price,
+            "availability": "Available",
+            "url": book_url
+        }
+
     except Exception as e:
-        return {"store": store, "url": url, "price": "Could not reach site", "found": False}
+        print(f"[PANUVAL ERROR] {e}")
+        return {
+            "store": "Panuval",
+            "price": "Error",
+            "availability": "Unavailable",
+            "url": search_url
+        }
 
 
-def search_commonfolks(title):
-    store = "Common Folks"
-    url = f"https://www.commonfolksbookstore.com/search?q={requests.utils.quote(title)}"
+# ---------- ANOTHER SITE (EXAMPLE) ----------
+def search_other_store(title: str):
+    """
+    Example second bookstore.
+    Update selectors based on actual site HTML.
+    """
+
+    search_url = "https://examplebookstore.com/search"
+    params = {"q": title}
+
     try:
-        res = requests.get(url, headers=HEADERS, timeout=8)
-        soup = BeautifulSoup(res.text, "html.parser")
-        # TODO: inspect commonfolksbookstore.com and update this selector
-        price_tag = soup.select_one(".price, .product-price, span.money")
-        price = price_tag.get_text(strip=True) if price_tag else "Visit site to check"
-        return {"store": store, "url": url, "price": price, "found": bool(price_tag)}
+        response = requests.get(
+            search_url,
+            params=params,
+            headers=HEADERS,
+            timeout=TIMEOUT
+        )
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        book_card = soup.select_one("div.book-item")
+
+        if not book_card:
+            return {
+                "store": "OtherStore",
+                "price": "Not found",
+                "availability": "Not available",
+                "url": search_url
+            }
+
+        price_tag = book_card.select_one(".price")
+        price = price_tag.get_text(strip=True) if price_tag else "Check site"
+
+        link_tag = book_card.find("a", href=True)
+        book_url = link_tag["href"] if link_tag else search_url
+
+        return {
+            "store": "OtherStore",
+            "price": price,
+            "availability": "Available",
+            "url": book_url
+        }
+
     except Exception as e:
-        return {"store": store, "url": url, "price": "Could not reach site", "found": False}
+        print(f"[OTHER STORE ERROR] {e}")
+        return {
+            "store": "OtherStore",
+            "price": "Error",
+            "availability": "Unavailable",
+            "url": search_url
+        }
 
 
-def search_ethirveliyeedu(title):
-    store = "Ethir Veliyeedu"
-    url = f"https://ethirveliyeedu.com/?s={requests.utils.quote(title)}"
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=8)
-        soup = BeautifulSoup(res.text, "html.parser")
-        # TODO: inspect ethirveliyeedu.com and update this selector
-        price_tag = soup.select_one(".price, .woocommerce-Price-amount, ins .amount")
-        price = price_tag.get_text(strip=True) if price_tag else "Visit site to check"
-        return {"store": store, "url": url, "price": price, "found": bool(price_tag)}
-    except Exception as e:
-        return {"store": store, "url": url, "price": "Could not reach site", "found": False}
+# ---------- API ROUTE ----------
+@app.route("/search", methods=["GET"])
+def search_books():
+    title = request.args.get("title")
 
-
-def search_zerodegree(title):
-    store = "Zero Degree"
-    url = f"https://zerodegreepublishing.com/?s={requests.utils.quote(title)}"
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=8)
-        soup = BeautifulSoup(res.text, "html.parser")
-        # TODO: inspect zerodegreepublishing.com and update this selector
-        price_tag = soup.select_one(".price, .woocommerce-Price-amount, ins .amount")
-        price = price_tag.get_text(strip=True) if price_tag else "Visit site to check"
-        return {"store": store, "url": url, "price": price, "found": bool(price_tag)}
-    except Exception as e:
-        return {"store": store, "url": url, "price": "Could not reach site", "found": False}
-
-
-def search_vishnupuram(title):
-    store = "Vishnupuram"
-    url = f"https://www.vishnupuram.com/search?q={requests.utils.quote(title)}"
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=8)
-        soup = BeautifulSoup(res.text, "html.parser")
-        # TODO: inspect vishnupuram.com and update this selector
-        price_tag = soup.select_one(".price, .product-price, span.money")
-        price = price_tag.get_text(strip=True) if price_tag else "Visit site to check"
-        return {"store": store, "url": url, "price": price, "found": bool(price_tag)}
-    except Exception as e:
-        return {"store": store, "url": url, "price": "Could not reach site", "found": False}
-
-
-# ─────────────────────────────────────────────
-#  Main search endpoint
-#  Your HTML app calls: GET /search?title=atomic+habits
-# ─────────────────────────────────────────────
-
-@app.route("/search")
-def search():
-    title = request.args.get("title", "").strip()
     if not title:
-        return jsonify({"error": "No title provided"}), 400
+        return jsonify({
+            "success": False,
+            "error": "Query parameter 'title' is required"
+        }), 400
 
-    results = [
-        search_panuval(title),
-        search_commonfolks(title),
-        search_ethirveliyeedu(title),
-        search_zerodegree(title),
-        search_vishnupuram(title),
-    ]
+    results = []
 
-    return jsonify({"title": title, "results": results})
+    results.append(search_panuval(title))
+    results.append(search_other_store(title))
 
-
-@app.route("/")
-def home():
-    return "BookFind backend is running ✓"
+    return jsonify({
+        "success": True,
+        "query": title,
+        "results": results
+    })
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
+``
