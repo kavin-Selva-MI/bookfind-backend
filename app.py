@@ -22,7 +22,7 @@ def search_panuval(title):
         res = requests.get(url, headers=HEADERS, timeout=8)
         soup = BeautifulSoup(res.text, "html.parser")
         # TODO: inspect panuval.com and update this selector
-        price_tag = soup.select_one(".product-price")
+        <span class="price-normal">₹50</span>
         price = price_tag.get_text(strip=True) if price_tag else "Visit site to check"
         return {"store": store, "url": url, "price": price, "found": bool(price_tag)}
     except Exception as e:
